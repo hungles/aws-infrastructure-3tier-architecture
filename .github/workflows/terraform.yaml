@@ -21,8 +21,6 @@ env:
   TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
   # Clave (ruta) del archivo de estado dentro del bucket
   TF_STATE_KEY: "aws-infrastructure-3tier/dev/terraform.tfstate"
-  # Tabla DynamoDB para bloqueo de estado (evita ejecuciones concurrentes)
-  TF_STATE_LOCK_TABLE: ${{ secrets.TF_STATE_LOCK_TABLE }}
 
 jobs:
   # ----------------------------------------------------------------------------
@@ -64,7 +62,6 @@ jobs:
             -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
             -backend-config="key=${{ env.TF_STATE_KEY }}" \
             -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="dynamodb_table=${{ env.TF_STATE_LOCK_TABLE }}" \
             -backend-config="encrypt=true"
 
       - name: "✅ Terraform validate"
@@ -125,7 +122,6 @@ jobs:
             -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
             -backend-config="key=${{ env.TF_STATE_KEY }}" \
             -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="dynamodb_table=${{ env.TF_STATE_LOCK_TABLE }}" \
             -backend-config="encrypt=true"
 
       - name: "📋 Terraform plan"
@@ -208,7 +204,6 @@ jobs:
             -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
             -backend-config="key=${{ env.TF_STATE_KEY }}" \
             -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="dynamodb_table=${{ env.TF_STATE_LOCK_TABLE }}" \
             -backend-config="encrypt=true"
 
       - name: "📥 Descargar plan aprobado"
