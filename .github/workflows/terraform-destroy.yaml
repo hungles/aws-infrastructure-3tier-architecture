@@ -1,0 +1,161 @@
+# ==============================================================================
+# Pipeline: Terraform Destroy
+# ⚠️  PELIGRO: Este pipeline DESTRUYE toda la infraestructura gestionada.
+# Solo se puede ejecutar manualmente (workflow_dispatch).
+# El usuario DEBE escribir "destroy" para confirmar la acción.
+# ==============================================================================
+name: "⚠️ Terraform Destroy"
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: '⚠️ Escribe "destroy" para confirmar la destrucción de TODA la infraestructura'
+        required: true
+        type: string
+      environment:
+        description: "Ambiente a destruir"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+
+env:
+  TF_VERSION: "1.9.5"
+  AWS_REGION: "us-east-1"
+  TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+  TF_STATE_KEY: "aws-infrastructure-3tier/${{ inputs.environment }}/terraform.tfstate"
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # JOB 1: Verificar confirmación — falla el pipeline si no escribió "destroy"
+  # ----------------------------------------------------------------------------
+  confirm:
+    name: "🔐 Verificar confirmación"
+    runs-on: ubuntu-latest
+    steps:
+      - name: "❌ Validar palabra de confirmación"
+        run: |
+          if [ "${{ github.event.inputs.confirmation }}" != "destroy" ]; then
+            echo "::error::⛔ Confirmación inválida. Debes escribir exactamente 'destroy' para continuar."
+            exit 1
+          fi
+          echo "✅ Confirmación recibida. Procediendo con la destrucción del ambiente: ${{ inputs.environment }}"
+
+  # ----------------------------------------------------------------------------
+  # JOB 2: Plan de destrucción — muestra qué se va a eliminar antes de actuar
+  # ----------------------------------------------------------------------------
+  destroy-plan:
+    name: "📋 Plan de destrucción"
+    runs-on: ubuntu-latest
+    needs: confirm
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: "📥 Checkout del código"
+        uses: actions/checkout@v4
+
+      - name: "⚙️ Setup Terraform ${{ env.TF_VERSION }}"
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: "🔐 Configurar credenciales AWS"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: "🚀 Terraform init"
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ env.TF_STATE_KEY }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="encrypt=true"
+
+      - name: "💣 Terraform plan -destroy"
+        id: plan
+        run: |
+          terraform plan \
+            -destroy \
+            -var-file="configuration.tfvars" \
+            -out=destroy.tfplan \
+            -no-color 2>&1 | tee destroy_plan_output.txt
+          echo "⚠️ El plan anterior muestra los recursos que serán ELIMINADOS."
+
+      - name: "💾 Guardar plan de destrucción como artefacto"
+        uses: actions/upload-artifact@v4
+        with:
+          name: destroy-tfplan
+          path: destroy.tfplan
+          retention-days: 1
+
+  # ----------------------------------------------------------------------------
+  # JOB 3: Destroy — requiere aprobación manual del environment en GitHub
+  # ----------------------------------------------------------------------------
+  destroy:
+    name: "💥 Terraform Destroy"
+    runs-on: ubuntu-latest
+    needs: destroy-plan
+    # Requiere que el environment tenga revisores configurados en GitHub
+    # Settings → Environments → [nombre] → Required reviewers
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: "📥 Checkout del código"
+        uses: actions/checkout@v4
+
+      - name: "⚙️ Setup Terraform ${{ env.TF_VERSION }}"
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: "🔐 Configurar credenciales AWS"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: "🚀 Terraform init"
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ env.TF_STATE_KEY }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="encrypt=true"
+
+      - name: "📥 Descargar plan de destrucción"
+        uses: actions/download-artifact@v4
+        with:
+          name: destroy-tfplan
+
+      - name: "💥 Terraform destroy"
+        run: |
+          echo "🔴 Iniciando destrucción del ambiente: ${{ inputs.environment }}"
+          echo "🔴 Ejecutado por: ${{ github.actor }}"
+          echo "🔴 Fecha y hora: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          terraform apply -auto-approve destroy.tfplan
+
+      - name: "📝 Resumen de destrucción"
+        if: always()
+        run: |
+          echo "## 💥 Terraform Destroy completado" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Campo | Valor |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🌍 Ambiente | \`${{ inputs.environment }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| 👤 Ejecutado por | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📅 Fecha | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔑 Confirmación | \`${{ inputs.confirmation }}\` |" >> $GITHUB_STEP_SUMMARY
