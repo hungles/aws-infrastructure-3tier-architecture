@@ -21,8 +21,6 @@ env:
   TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
   # Clave (ruta) del archivo de estado dentro del bucket
   TF_STATE_KEY: "aws-infrastructure-3tier/dev/terraform.tfstate"
-  # Tabla DynamoDB para bloqueo de estado (evita ejecuciones concurrentes)
-  TF_STATE_LOCK_TABLE: ${{ secrets.TF_STATE_LOCK_TABLE }}
 
 jobs:
   # ----------------------------------------------------------------------------
@@ -44,6 +42,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
       - name: "🎨 Terraform fmt (verificación de formato)"
         id: fmt
@@ -59,12 +58,13 @@ jobs:
 
       - name: "🚀 Terraform init (con backend S3)"
         id: init
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
         run: |
           terraform init \
             -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
             -backend-config="key=${{ env.TF_STATE_KEY }}" \
             -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="dynamodb_table=${{ env.TF_STATE_LOCK_TABLE }}" \
             -backend-config="encrypt=true"
 
       - name: "✅ Terraform validate"
@@ -120,12 +120,13 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: "🚀 Terraform init"
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
         run: |
           terraform init \
             -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
             -backend-config="key=${{ env.TF_STATE_KEY }}" \
             -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="dynamodb_table=${{ env.TF_STATE_LOCK_TABLE }}" \
             -backend-config="encrypt=true"
 
       - name: "📋 Terraform plan"
@@ -203,12 +204,13 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: "🚀 Terraform init"
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
         run: |
           terraform init \
             -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
             -backend-config="key=${{ env.TF_STATE_KEY }}" \
             -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="dynamodb_table=${{ env.TF_STATE_LOCK_TABLE }}" \
             -backend-config="encrypt=true"
 
       - name: "📥 Descargar plan aprobado"
