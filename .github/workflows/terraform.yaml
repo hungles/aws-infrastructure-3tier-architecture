@@ -35,7 +35,7 @@ jobs:
   fmt-and-validate:
     name: "🔍 Format & Validate"
     runs-on: ubuntu-latest
-    #environment: ${{ (github.ref == 'refs/heads/main' || github.base_ref == 'main') && 'production' || 'dev' }}
+    environment: ${{ (github.ref == 'refs/heads/main' || github.base_ref == 'main') && 'production' || 'dev' }}
 
     steps:
       - name: "📥 Checkout del código"
@@ -53,11 +53,12 @@ jobs:
         # El flag -check retorna exit code 1 si hay archivos mal formateados
 
       - name: Configure AWS Credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v4.1.0
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502
         with:
           # Inyecta dinámicamente el ARN del rol de la cuenta de DEV
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
+          role-session-name: samplerolesession
 
       - name: Verify AWS Account
         run: |
