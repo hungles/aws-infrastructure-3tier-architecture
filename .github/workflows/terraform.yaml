@@ -22,9 +22,7 @@ env:
   TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
   # Clave (ruta) del archivo de estado dentro del bucket
   TF_STATE_KEY: "aws-infrastructure-3tier/dev/terraform.tfstate"
-  AMBIENTE: ${{vars.AMBIENTE}}
-  AWS_ROLES: ${{vars.AWS_ROLE_TO_ASSUME}}
-
+  
 permissions:
   id-token: write   # Necesario para que GitHub genere el JWT de OIDC
   contents: read    # Necesario para hacer checkout del código
@@ -62,7 +60,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4.1.0
         with:
           # Inyecta dinámicamente el ARN del rol de la cuenta de DEV
-          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Verify AWS Account
