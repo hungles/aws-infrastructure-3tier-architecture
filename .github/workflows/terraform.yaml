@@ -58,10 +58,10 @@ jobs:
         # El flag -check retorna exit code 1 si hay archivos mal formateados
 
       - name: Configure AWS Credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v4.1.0
         with:
           # Inyecta dinámicamente el ARN del rol de la cuenta de DEV
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Verify AWS Account
