@@ -22,6 +22,7 @@ env:
   TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
   # Clave (ruta) del archivo de estado dentro del bucket
   TF_STATE_KEY: "aws-infrastructure-3tier/dev/terraform.tfstate"
+  AMBIENTE: ${{vars.AMBIENTE}}
 
 jobs:
   # ----------------------------------------------------------------------------
