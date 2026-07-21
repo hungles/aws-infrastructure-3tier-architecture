@@ -24,6 +24,10 @@ env:
   TF_STATE_KEY: "aws-infrastructure-3tier/dev/terraform.tfstate"
   AMBIENTE: ${{vars.AMBIENTE}}
 
+permissions:
+  id-token: write   # Necesario para que GitHub genere el JWT de OIDC
+  contents: read    # Necesario para hacer checkout del código
+
 jobs:
   # ----------------------------------------------------------------------------
   # JOB 1: Formato y Validación
