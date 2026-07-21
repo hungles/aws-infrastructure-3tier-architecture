@@ -9,10 +9,11 @@ on:
   push:
     branches:
       - main
-      - develop
+      - dev
   pull_request:
     branches:
       - main
+      - dev
 
 env:
   TF_VERSION: "1.9.5"
@@ -22,6 +23,10 @@ env:
   # Clave (ruta) del archivo de estado dentro del bucket
   TF_STATE_KEY: "aws-infrastructure-3tier/dev/terraform.tfstate"
 
+permissions:
+  id-token: write   # Necesario para que GitHub genere el JWT de OIDC
+  contents: read    # Necesario para hacer checkout del código
+
 jobs:
   # ----------------------------------------------------------------------------
   # JOB 1: Formato y Validación
@@ -30,9 +35,7 @@ jobs:
   fmt-and-validate:
     name: "🔍 Format & Validate"
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
+    environment: ${{ (github.ref == 'refs/heads/main' || github.base_ref == 'main') && 'production' || 'dev' }}
 
     steps:
       - name: "📥 Checkout del código"
@@ -44,17 +47,30 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
+      - name: Debug GitHub Context
+        run: |
+          echo "Repository: ${{ github.repository }}"
+          echo "Event: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Base Ref: ${{ github.base_ref }}"
+
       - name: "🎨 Terraform fmt (verificación de formato)"
         id: fmt
         run: terraform fmt -check -recursive
         # El flag -check retorna exit code 1 si hay archivos mal formateados
 
-      - name: "🔐 Configurar credenciales AWS"
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # Inyecta dinámicamente el ARN del rol de la cuenta de DEV
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
+          role-session-name: samplerolesession
+
+      - name: Verify AWS Account
+        run: |
+          echo "Verificando cuenta destino:"
+          aws sts get-caller-identity
 
       - name: "🚀 Terraform init (con backend S3)"
         id: init
@@ -98,8 +114,10 @@ jobs:
   plan:
     name: "📋 Terraform Plan"
     runs-on: ubuntu-latest
+    environment: ${{ (github.ref == 'refs/heads/main' || github.base_ref == 'main') && 'production' || 'dev' }}
     needs: fmt-and-validate
     permissions:
+      id-token: write
       contents: read
       pull-requests: write
 
@@ -112,11 +130,11 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: "🔐 Configurar credenciales AWS"
+      - name: Configure AWS Credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # Inyecta dinámicamente el ARN del rol de la cuenta de DEV
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: "🚀 Terraform init"
@@ -185,7 +203,10 @@ jobs:
     # Solo aplica en push directo a main (no en pull_request)
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     # Requiere aprobación manual (configura el environment 'production' en GitHub)
-    environment: production
+    environment: ${{ (github.ref == 'refs/heads/main' || github.base_ref == 'main') && 'production' || 'dev' }}
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
       - name: "📥 Checkout del código"
@@ -196,11 +217,11 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: "🔐 Configurar credenciales AWS"
+      - name: Configure AWS Credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # Inyecta dinámicamente el ARN del rol de la cuenta de DEV
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: "🚀 Terraform init"
@@ -220,3 +241,4 @@ jobs:
 
       - name: "✅ Terraform apply"
         run: terraform apply -auto-approve tfplan.binary
+
