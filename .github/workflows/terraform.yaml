@@ -47,6 +47,13 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
+      - name: Debug GitHub Context
+        run: |
+          echo "Repository: ${{ github.repository }}"
+          echo "Event: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Base Ref: ${{ github.base_ref }}"
+
       - name: "🎨 Terraform fmt (verificación de formato)"
         id: fmt
         run: terraform fmt -check -recursive
