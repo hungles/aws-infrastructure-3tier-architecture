@@ -36,7 +36,7 @@ jobs:
   fmt-and-validate:
     name: "🔍 Format & Validate"
     runs-on: ubuntu-latest
-    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'dev' }}
+    environment: ${{ (github.ref == 'refs/heads/main' || github.base_ref == 'main') && 'production' || 'dev' }}
     permissions:
       id-token: write
       contents: read
@@ -111,7 +111,7 @@ jobs:
   plan:
     name: "📋 Terraform Plan"
     runs-on: ubuntu-latest
-    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'dev' }}
+    environment: ${{ (github.ref == 'refs/heads/main' || github.base_ref == 'main') && 'production' || 'dev' }}
     needs: fmt-and-validate
     permissions:
       id-token: write
@@ -200,7 +200,7 @@ jobs:
     # Solo aplica en push directo a main (no en pull_request)
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     # Requiere aprobación manual (configura el environment 'production' en GitHub)
-    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'dev' }}
+    environment: ${{ (github.ref == 'refs/heads/main' || github.base_ref == 'main') && 'production' || 'dev' }}
     permissions:
       id-token: write
       contents: read
