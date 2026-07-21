@@ -23,6 +23,7 @@ env:
   # Clave (ruta) del archivo de estado dentro del bucket
   TF_STATE_KEY: "aws-infrastructure-3tier/dev/terraform.tfstate"
   AMBIENTE: ${{vars.AMBIENTE}}
+  AWS_ROLES: ${{vars.AWS_ROLE_TO_ASSUME}}
 
 permissions:
   id-token: write   # Necesario para que GitHub genere el JWT de OIDC
