@@ -51,14 +51,6 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
-      - name: Debug GitHub Context
-        run: |
-          echo "Repository: ${{ github.repository }}"
-          echo "Event: ${{ github.event_name }}"
-          echo "Ref: ${{ github.ref }}"
-          echo "Base Ref: ${{ github.base_ref }}"
-
-
       - name: "🎨 Terraform fmt (verificación de formato)"
         id: fmt
         run: terraform fmt -check -recursive
@@ -70,11 +62,6 @@ jobs:
           # Inyecta dinámicamente el ARN del rol de la cuenta de DEV
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
-
-      - name: Verify AWS Account
-        run: |
-          echo "Verificando cuenta destino:"
-          aws sts get-caller-identity
 
       - name: "🚀 Terraform init (con backend S3)"
         id: init
