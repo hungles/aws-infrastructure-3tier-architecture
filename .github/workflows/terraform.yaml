@@ -36,6 +36,10 @@ jobs:
     name: "🔍 Format & Validate"
     runs-on: ubuntu-latest
     environment: ${{ (github.ref == 'refs/heads/main' || github.base_ref == 'main') && 'production' || 'dev' }}
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write   # Necesario para comentar en PRs
 
     steps:
       - name: "📥 Checkout del código"
