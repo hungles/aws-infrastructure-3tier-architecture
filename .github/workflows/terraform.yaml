@@ -10,10 +10,12 @@ on:
     branches:
       - main
       - dev
+      - release/* 
   pull_request:
     branches:
       - main
       - dev
+      - release/*
 
 env:
   TF_VERSION: "1.9.5"
@@ -22,7 +24,7 @@ env:
   TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
   # Clave (ruta) del archivo de estado dentro del bucket
   TF_STATE_KEY: "aws-infrastructure-3tier/dev/terraform.tfstate"
-  
+
 permissions:
   id-token: write   # Necesario para que GitHub genere el JWT de OIDC
   contents: read    # Necesario para hacer checkout del código
