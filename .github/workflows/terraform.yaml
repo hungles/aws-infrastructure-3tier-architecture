@@ -19,9 +19,9 @@ env:
   TF_VERSION: "1.9.5"
   AWS_REGION: "us-east-1"
   # Nombre del bucket S3 donde se guarda el estado remoto
-  TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+  TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
   # Clave (ruta) del archivo de estado dentro del bucket
-  TF_STATE_KEY: "aws-infrastructure-3tier/dev/terraform.tfstate"
+  TF_STATE_KEY: "aws-infrastructure-3tier/terraform.tfstate"
 
 permissions:
   id-token: write   # Necesario para que GitHub genere el JWT de OIDC
@@ -36,6 +36,10 @@ jobs:
     name: "🔍 Format & Validate"
     runs-on: ubuntu-latest
     environment: ${{ (github.ref == 'refs/heads/main' || github.base_ref == 'main') && 'production' || 'dev' }}
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write   # Necesario para comentar en PRs
 
     steps:
       - name: "📥 Checkout del código"
@@ -54,18 +58,18 @@ jobs:
           echo "Ref: ${{ github.ref }}"
           echo "Base Ref: ${{ github.base_ref }}"
 
+
       - name: "🎨 Terraform fmt (verificación de formato)"
         id: fmt
         run: terraform fmt -check -recursive
         # El flag -check retorna exit code 1 si hay archivos mal formateados
 
       - name: Configure AWS Credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           # Inyecta dinámicamente el ARN del rol de la cuenta de DEV
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
-          role-session-name: samplerolesession
 
       - name: Verify AWS Account
         run: |
@@ -241,4 +245,5 @@ jobs:
 
       - name: "✅ Terraform apply"
         run: terraform apply -auto-approve tfplan.binary
+
 
