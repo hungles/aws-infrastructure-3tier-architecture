@@ -19,7 +19,7 @@ env:
   TF_VERSION: "1.9.5"
   AWS_REGION: "us-east-1"
   # Nombre del bucket S3 donde se guarda el estado remoto
-  TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+  TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
   # Clave (ruta) del archivo de estado dentro del bucket
   TF_STATE_KEY: "aws-infrastructure-3tier/terraform.tfstate"
 
@@ -44,6 +44,18 @@ jobs:
     steps:
       - name: "📥 Checkout del código"
         uses: actions/checkout@v4
+
+      # Deriva el nombre del entorno en función de la rama destino del PR o del push
+      # PR → dev  = dev | PR → main = prd
+      - name: "🌐 Set environment name"
+        id: set_env
+        run: |
+          TARGET_BRANCH="${{ github.base_ref || github.ref_name }}"
+          if [ "$TARGET_BRANCH" = "main" ]; then
+            echo "env_name=prd" >> $GITHUB_OUTPUT
+          else
+            echo "env_name=dev" >> $GITHUB_OUTPUT
+          fi
 
       - name: "⚙️ Setup Terraform ${{ env.TF_VERSION }}"
         uses: hashicorp/setup-terraform@v3
@@ -116,6 +128,18 @@ jobs:
       - name: "📥 Checkout del código"
         uses: actions/checkout@v4
 
+      # Deriva el nombre del entorno en función de la rama destino del PR o del push
+      # PR → dev  = dev | PR → main = prd
+      - name: "🌐 Set environment name"
+        id: set_env
+        run: |
+          TARGET_BRANCH="${{ github.base_ref || github.ref_name }}"
+          if [ "$TARGET_BRANCH" = "main" ]; then
+            echo "env_name=prd" >> $GITHUB_OUTPUT
+          else
+            echo "env_name=dev" >> $GITHUB_OUTPUT
+          fi
+
       - name: "⚙️ Setup Terraform ${{ env.TF_VERSION }}"
         uses: hashicorp/setup-terraform@v3
         with:
@@ -140,6 +164,9 @@ jobs:
 
       - name: "📋 Terraform plan"
         id: plan
+        env:
+          # Pasa la variable dinámica a Terraform → var.environment = dev | prd
+          TF_VAR_environment: ${{ steps.set_env.outputs.env_name }}
         run: |
           terraform plan \
             -var-file="configuration.tfvars" \
@@ -203,6 +230,18 @@ jobs:
       - name: "📥 Checkout del código"
         uses: actions/checkout@v4
 
+      # Deriva el nombre del entorno en función de la rama destino del PR o del push
+      # PR → dev  = dev | PR → main = prd
+      - name: "🌐 Set environment name"
+        id: set_env
+        run: |
+          TARGET_BRANCH="${{ github.base_ref || github.ref_name }}"
+          if [ "$TARGET_BRANCH" = "main" ]; then
+            echo "env_name=prd" >> $GITHUB_OUTPUT
+          else
+            echo "env_name=dev" >> $GITHUB_OUTPUT
+          fi
+
       - name: "⚙️ Setup Terraform ${{ env.TF_VERSION }}"
         uses: hashicorp/setup-terraform@v3
         with:
@@ -231,6 +270,9 @@ jobs:
           name: tfplan
 
       - name: "✅ Terraform apply"
+        env:
+          # Pasa la variable dinámica a Terraform → var.environment = dev | prd
+          TF_VAR_environment: ${{ steps.set_env.outputs.env_name }}
         run: terraform apply -auto-approve tfplan.binary
 
 
