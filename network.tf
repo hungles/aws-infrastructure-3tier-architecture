@@ -5,7 +5,7 @@ module "vpc_dev" {
   source  = "app.terraform.io/hungles_terraform/secure-vpc/aws"
   version = "0.0.2"
 
-  environment = "dev"
+  environment = var.environment
   vpc_cidr    = var.vpc_cidr
 
   availability_zones    = var.availability_zones

@@ -23,3 +23,8 @@ variable "database_subnet_cidrs" {
   description = "CIDR blocks for database subnets"
   type        = list(string)
 }
+
+variable "environment" {
+  description = "Entorno de despliegue: dev o prd"
+  type        = string
+}
