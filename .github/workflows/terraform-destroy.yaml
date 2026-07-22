@@ -36,6 +36,10 @@ jobs:
   confirm:
     name: "🔐 Verificar confirmación"
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write 
+      contents: read
+
     steps:
       - name: "❌ Validar palabra de confirmación"
         run: |
@@ -52,6 +56,9 @@ jobs:
     name: "📋 Plan de destrucción"
     runs-on: ubuntu-latest
     needs: confirm
+    permissions:
+      id-token: write 
+      contents: read
     environment: ${{ inputs.environment }}
 
     steps:
@@ -105,6 +112,9 @@ jobs:
     name: "💥 Terraform Destroy"
     runs-on: ubuntu-latest
     needs: destroy-plan
+    permissions:
+      id-token: write 
+      contents: read
     # Requiere que el environment tenga revisores configurados en GitHub
     # Settings → Environments → [nombre] → Required reviewers
     environment: ${{ inputs.environment }}
