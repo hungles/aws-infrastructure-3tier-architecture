@@ -35,3 +35,4 @@ data "aws_subnet" "public_details" {
   for_each = toset(data.aws_subnets.public.ids)
   id       = each.value
 }
+
