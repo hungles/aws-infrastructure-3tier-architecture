@@ -1,5 +1,5 @@
 # ==============================================================================
-# Pipeline: Terraform Destroy
+# Pipeline: Terraform Destroy Multi-Módulo
 # ⚠️  PELIGRO: Este pipeline DESTRUYE toda la infraestructura gestionada.
 # Solo se puede ejecutar manualmente (workflow_dispatch).
 # El usuario DEBE escribir "destroy" para confirmar la acción.
@@ -10,11 +10,11 @@ on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: '⚠️ Escribe "destroy" para confirmar la destrucción de TODA la infraestructura'
+        description: '⚠️ Type "destroy" to confirm destroying ALL infrastructure'
         required: true
         type: string
       environment:
-        description: "Ambiente a destruir"
+        description: "Environment to destroy"
         required: true
         default: "dev"
         type: choice
@@ -27,7 +27,7 @@ env:
   TF_VERSION: "1.9.5"
   AWS_REGION: "us-east-1"
   TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
-  TF_STATE_KEY: "aws-infrastructure-3tier/terraform.tfstate"
+  VAR_FILE: "../configuration.tfvars"
 
 jobs:
   # ----------------------------------------------------------------------------
@@ -36,6 +36,8 @@ jobs:
   confirm:
     name: "🔐 Verificar confirmación"
     runs-on: ubuntu-latest
+    outputs:
+      env_name: ${{ steps.set_env.outputs.env_name }}
     permissions:
       id-token: write 
       contents: read
@@ -54,7 +56,6 @@ jobs:
         run: |
           SELECTED_ENV="${{ github.event.inputs.environment }}"
           
-          # Hacemos la lógica de mapeo según lo que necesites
           if [ "$SELECTED_ENV" = "production" ]; then
             ENV_NAME="prd"
           elif [ "$SELECTED_ENV" = "staging" ]; then
@@ -64,7 +65,6 @@ jobs:
           fi
           
           echo "Ambiente mapeado: $ENV_NAME"
-          
           echo "env_name=$ENV_NAME" >> $GITHUB_OUTPUT
 
   # ----------------------------------------------------------------------------
@@ -89,40 +89,65 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
-      - name: Configure AWS Credentials via OIDC
+      - name: "🔐 Configurar credenciales AWS via OIDC"
+        if: secrets.AWS_ROLE_TO_ASSUME != ''
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          # Inyecta dinámicamente el ARN del rol de la cuenta de DEV
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: "🚀 Terraform init"
+      - name: "💣 Plan Destroy — Módulo Instances"
+        working-directory: instances
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+          TF_VAR_environment: ${{ needs.confirm.outputs.env_name }}
         run: |
+          echo "=== 1. Terraform Init (instances) ==="
           terraform init \
             -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
-            -backend-config="key=${{ env.TF_STATE_KEY }}" \
+            -backend-config="key=aws-infrastructure-3tier/instances/terraform.tfstate" \
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="encrypt=true"
-
-      - name: "💣 Terraform plan -destroy"
-        env:
-          TF_VAR_environment: ${{ steps.set_env.outputs.env_name }}
-        id: plan
-        run: |
+          
+          echo "=== 2. Terraform Plan -destroy (instances) ==="
           terraform plan \
             -destroy \
-            -var-file="configuration.tfvars" \
-            -out=destroy.tfplan \
-            -no-color 2>&1 | tee destroy_plan_output.txt
-          echo "⚠️ El plan anterior muestra los recursos que serán ELIMINADOS."
+            -var-file="${{ env.VAR_FILE }}" \
+            -out=instances_destroy.tfplan \
+            -no-color
 
-      - name: "💾 Guardar plan de destrucción como artefacto"
+      - name: "💣 Plan Destroy — Módulo Network"
+        working-directory: network
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+          TF_VAR_environment: ${{ needs.confirm.outputs.env_name }}
+        run: |
+          echo "=== 1. Terraform Init (network) ==="
+          terraform init \
+            -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
+            -backend-config="key=aws-infrastructure-3tier/network/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="encrypt=true"
+          
+          echo "=== 2. Terraform Plan -destroy (network) ==="
+          terraform plan \
+            -destroy \
+            -var-file="${{ env.VAR_FILE }}" \
+            -out=network_destroy.tfplan \
+            -no-color
+
+      - name: "💾 Guardar plan de destrucción (Instances) como artefacto"
         uses: actions/upload-artifact@v4
         with:
-          name: destroy-tfplan
-          path: destroy.tfplan
+          name: instances-destroy-tfplan
+          path: instances/instances_destroy.tfplan
+          retention-days: 1
+
+      - name: "💾 Guardar plan de destrucción (Network) como artefacto"
+        uses: actions/upload-artifact@v4
+        with:
+          name: network-destroy-tfplan
+          path: network/network_destroy.tfplan
           retention-days: 1
 
   # ----------------------------------------------------------------------------
@@ -131,12 +156,11 @@ jobs:
   destroy:
     name: "💥 Terraform Destroy"
     runs-on: ubuntu-latest
-    needs: destroy-plan
+    needs: [confirm, destroy-plan]
     permissions:
       id-token: write 
       contents: read
     # Requiere que el environment tenga revisores configurados en GitHub
-    # Settings → Environments → [nombre] → Required reviewers
     environment: ${{ inputs.environment }}
 
     steps:
@@ -149,36 +173,52 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
-      - name: "🔐 Configurar credenciales AWS"
+      - name: "🔐 Configurar credenciales AWS via OIDC"
+        if: secrets.AWS_ROLE_TO_ASSUME != ''
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: "🚀 Terraform init"
-        env:
-          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
-        run: |
-          terraform init \
-            -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
-            -backend-config="key=${{ env.TF_STATE_KEY }}" \
-            -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="encrypt=true"
-
-      - name: "📥 Descargar plan de destrucción"
+      - name: "📥 Descargar plan de destrucción (Instances)"
         uses: actions/download-artifact@v4
         with:
-          name: destroy-tfplan
+          name: instances-destroy-tfplan
+          path: instances
 
-      - name: "💥 Terraform destroy"
+      - name: "📥 Descargar plan de destrucción (Network)"
+        uses: actions/download-artifact@v4
+        with:
+          name: network-destroy-tfplan
+          path: network
+
+      - name: "💥 Destroy Módulo Instances (1/2)"
+        working-directory: instances
         env:
-          TF_VAR_environment: ${{ steps.set_env.outputs.env_name }}
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+          TF_VAR_environment: ${{ needs.confirm.outputs.env_name }}
         run: |
-          echo "🔴 Iniciando destrucción del ambiente: ${{ inputs.environment }}"
-          echo "🔴 Ejecutado por: ${{ github.actor }}"
-          echo "🔴 Fecha y hora: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-          terraform apply -auto-approve destroy.tfplan
+          echo "🔴 (1/2) Destruyendo Módulo Instances en ambiente: ${{ inputs.environment }}"
+          terraform init \
+            -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
+            -backend-config="key=aws-infrastructure-3tier/instances/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="encrypt=true"
+          terraform apply -auto-approve instances_destroy.tfplan
+
+      - name: "💥 Destroy Módulo Network (2/2)"
+        working-directory: network
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+          TF_VAR_environment: ${{ needs.confirm.outputs.env_name }}
+        run: |
+          echo "🔴 (2/2) Destruyendo Módulo Network en ambiente: ${{ inputs.environment }}"
+          terraform init \
+            -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
+            -backend-config="key=aws-infrastructure-3tier/network/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="encrypt=true"
+          terraform apply -auto-approve network_destroy.tfplan
 
       - name: "📝 Resumen de destrucción"
         if: always()
@@ -188,6 +228,7 @@ jobs:
           echo "| Campo | Valor |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| 🌍 Ambiente | \`${{ inputs.environment }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📦 Módulos Destruidos | \`instances\`, \`network\` |" >> $GITHUB_STEP_SUMMARY
           echo "| 👤 Ejecutado por | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
           echo "| 📅 Fecha | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
           echo "| 🔑 Confirmación | \`${{ inputs.confirmation }}\` |" >> $GITHUB_STEP_SUMMARY
