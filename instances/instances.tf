@@ -2,7 +2,7 @@
 #   source  = "app.terraform.io/hungles_terraform/ec2_Instance/aws"
 #   version = "0.0.2"
 #   for_each = local.instance_configs
-  
+
 #   environment   = var.environment
 #   instance_type = each.value.instance_type
 #   vpc_id        = var.vpc_id
