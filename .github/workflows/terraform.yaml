@@ -1,7 +1,7 @@
 # ==============================================================================
-# Pipeline: Terraform CI/CD
-# Descripción: Valida, planifica y aplica la infraestructura AWS.
-#              El estado remoto se almacena en un bucket de S3.
+# Pipeline: Terraform CI/CD Multi-Módulo
+# Descripción: Invoca el reusable workflow reusable-terraform.yaml para ejecutar
+#              el pipeline de Terraform en cada directorio/recurso (network, instances).
 # ==============================================================================
 name: "Terraform CI/CD"
 
@@ -15,264 +15,65 @@ on:
       - main
       - dev
 
-env:
-  TF_VERSION: "1.9.5"
-  AWS_REGION: "us-east-1"
-  # Nombre del bucket S3 donde se guarda el estado remoto
-  TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
-  # Clave (ruta) del archivo de estado dentro del bucket
-  TF_STATE_KEY: "aws-infrastructure-3tier/terraform.tfstate"
-
 permissions:
-  id-token: write   # Necesario para que GitHub genere el JWT de OIDC
-  contents: read    # Necesario para hacer checkout del código
+  id-token: write
+  contents: read
+  pull-requests: write
 
 jobs:
-  # ----------------------------------------------------------------------------
-  # JOB 1: Formato y Validación
-  # Se ejecuta en TODOS los eventos (push y pull_request)
-  # ----------------------------------------------------------------------------
-  fmt-and-validate:
-    name: "🔍 Format & Validate"
+  set-env:
+    name: "⚙️ Configurar Ambiente"
     runs-on: ubuntu-latest
-    environment: ${{ (github.ref == 'refs/heads/main' || github.base_ref == 'main') && 'production' || 'dev' }}
-    permissions:
-      id-token: write
-      contents: read
-      pull-requests: write   # Necesario para comentar en PRs
-
+    outputs:
+      target_env: ${{ steps.env_step.outputs.target_env }}
+      enable_apply: ${{ steps.env_step.outputs.enable_apply }}
     steps:
-      - name: "📥 Checkout del código"
-        uses: actions/checkout@v4
-
-      # Deriva el nombre del entorno en función de la rama destino del PR o del push
-      # PR → dev  = dev | PR → main = prd
-      - name: "🌐 Set environment name"
-        id: set_env
+      - name: "Calcular ambiente y permisos de Apply"
+        id: env_step
         run: |
           TARGET_BRANCH="${{ github.base_ref || github.ref_name }}"
           if [ "$TARGET_BRANCH" = "main" ]; then
-            echo "env_name=prod" >> $GITHUB_OUTPUT
+            echo "target_env=production" >> $GITHUB_OUTPUT
           else
-            echo "env_name=dev" >> $GITHUB_OUTPUT
+            echo "target_env=dev" >> $GITHUB_OUTPUT
           fi
 
-      - name: "⚙️ Setup Terraform ${{ env.TF_VERSION }}"
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
-
-      - name: "🎨 Terraform fmt (verificación de formato)"
-        id: fmt
-        run: terraform fmt -check -recursive
-        # El flag -check retorna exit code 1 si hay archivos mal formateados
-
-      - name: Configure AWS Credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          # Inyecta dinámicamente el ARN del rol de la cuenta de DEV
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: "🚀 Terraform init (con backend S3)"
-        id: init
-        env:
-          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
-        run: |
-          terraform init \
-            -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
-            -backend-config="key=${{ env.TF_STATE_KEY }}" \
-            -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="encrypt=true"
-
-      - name: "✅ Terraform validate"
-        id: validate
-        run: terraform validate -no-color
-
-      # Publica un comentario en el PR con el resultado de fmt/validate
-      - name: "💬 Comentar resultado en PR"
-        uses: actions/github-script@v7
-        if: github.event_name == 'pull_request'
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const output = `#### Terraform Format \`${{ steps.fmt.outcome }}\`
-            #### Terraform Init \`${{ steps.init.outcome }}\`
-            #### Terraform Validate \`${{ steps.validate.outcome }}\`
-
-            *Ejecutado por: @${{ github.actor }}, Evento: \`${{ github.event_name }}\`*`;
-
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: output
-            });
-
-  # ----------------------------------------------------------------------------
-  # JOB 2: Plan
-  # Se ejecuta en TODOS los eventos después de fmt-and-validate
-  # ----------------------------------------------------------------------------
-  plan:
-    name: "📋 Terraform Plan"
-    runs-on: ubuntu-latest
-    environment: ${{ (github.ref == 'refs/heads/main' || github.base_ref == 'main') && 'production' || 'dev' }}
-    needs: fmt-and-validate
-    permissions:
-      id-token: write
-      contents: read
-      pull-requests: write
-
-    steps:
-      - name: "📥 Checkout del código"
-        uses: actions/checkout@v4
-
-      # Deriva el nombre del entorno en función de la rama destino del PR o del push
-      # PR → dev  = dev | PR → main = prd
-      - name: "🌐 Set environment name"
-        id: set_env
-        run: |
-          TARGET_BRANCH="${{ github.base_ref || github.ref_name }}"
-          if [ "$TARGET_BRANCH" = "main" ]; then
-            echo "env_name=prod" >> $GITHUB_OUTPUT
+          if [ "${{ github.event_name }}" = "push" ] && ( [ "$TARGET_BRANCH" = "main" ] || [ "$TARGET_BRANCH" = "dev" ] ); then
+            echo "enable_apply=true" >> $GITHUB_OUTPUT
           else
-            echo "env_name=dev" >> $GITHUB_OUTPUT
+            echo "enable_apply=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: "⚙️ Setup Terraform ${{ env.TF_VERSION }}"
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Configure AWS Credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          # Inyecta dinámicamente el ARN del rol de la cuenta de DEV
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: "🚀 Terraform init"
-        env:
-          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
-        run: |
-          terraform init \
-            -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
-            -backend-config="key=${{ env.TF_STATE_KEY }}" \
-            -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="encrypt=true"
-
-      - name: "📋 Terraform plan"
-        id: plan
-        env:
-          # Pasa la variable dinámica a Terraform → var.environment = dev | prd
-          TF_VAR_environment: ${{ steps.set_env.outputs.env_name }}
-        run: |
-          terraform plan \
-            -var-file="configuration.tfvars" \
-            -out=tfplan.binary \
-            -no-color 2>&1 | tee plan_output.txt
-        # El plan se guarda como artefacto para que apply lo use
-
-      - name: "💾 Guardar plan como artefacto"
-        uses: actions/upload-artifact@v4
-        with:
-          name: tfplan
-          path: tfplan.binary
-          retention-days: 5
-
-      - name: "💬 Publicar plan en PR"
-        uses: actions/github-script@v7
-        if: github.event_name == 'pull_request'
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const fs = require('fs');
-            const planOutput = fs.readFileSync('plan_output.txt', 'utf8');
-            const truncated = planOutput.length > 60000
-              ? planOutput.substring(0, 60000) + '\n\n... (output truncado)'
-              : planOutput;
-
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `#### 📋 Terraform Plan \`${{ steps.plan.outcome }}\`
-            <details><summary>Ver plan completo</summary>
-
-            \`\`\`hcl
-            ${truncated}
-            \`\`\`
-
-            </details>
-
-            *Ejecutado por: @${{ github.actor }}*`
-            });
+  # ----------------------------------------------------------------------------
+  # MÓDULO 1: Network (Redes, VPC, Subredes)
+  # ----------------------------------------------------------------------------
+  network:
+    name: "🌐 Redes (Network)"
+    needs: set-env
+    uses: ./.github/workflows/reusable-terraform.yaml
+    with:
+      working_directory: "network"
+      environment: ${{ needs.set-env.outputs.target_env }}
+      tf_version: "1.9.5"
+      aws_region: "us-east-1"
+      tf_state_key: "aws-infrastructure-3tier/network/terraform.tfstate"
+      var_file: "../configuration.tfvars"
+      enable_apply: ${{ needs.set-env.outputs.enable_apply == 'true' }}
+    secrets: inherit
 
   # ----------------------------------------------------------------------------
-  # JOB 3: Apply
-  # Solo se ejecuta en push a 'main' (no en PRs)
-  # Requiere aprobación manual mediante GitHub Environments
+  # MÓDULO 2: Instances (Servidores EC2) - Depende de Network
   # ----------------------------------------------------------------------------
-  apply:
-    name: "🚀 Terraform Apply"
-    runs-on: ubuntu-latest
-    needs: plan
-    # Solo aplica en push directo a main (no en pull_request)
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' || github.ref == 'refs/heads/dev' && github.event_name == 'push'
-    # Requiere aprobación manual (configura el environment 'production' en GitHub)
-    environment: ${{ (github.ref == 'refs/heads/main' || github.base_ref == 'main') && 'production' || 'dev' }}
-    permissions:
-      id-token: write
-      contents: read
-
-    steps:
-      - name: "📥 Checkout del código"
-        uses: actions/checkout@v4
-
-      # Deriva el nombre del entorno en función de la rama destino del PR o del push
-      # PR → dev  = dev | PR → main = prd
-      - name: "🌐 Set environment name"
-        id: set_env
-        run: |
-          TARGET_BRANCH="${{ github.base_ref || github.ref_name }}"
-          if [ "$TARGET_BRANCH" = "main" ]; then
-            echo "env_name=prod" >> $GITHUB_OUTPUT
-          else
-            echo "env_name=dev" >> $GITHUB_OUTPUT
-          fi
-
-      - name: "⚙️ Setup Terraform ${{ env.TF_VERSION }}"
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Configure AWS Credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          # Inyecta dinámicamente el ARN del rol de la cuenta de DEV
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: "🚀 Terraform init"
-        env:
-          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
-        run: |
-          terraform init \
-            -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
-            -backend-config="key=${{ env.TF_STATE_KEY }}" \
-            -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="encrypt=true"
-
-      - name: "📥 Descargar plan aprobado"
-        uses: actions/download-artifact@v4
-        with:
-          name: tfplan
-
-      - name: "✅ Terraform apply"
-        env:
-          # Pasa la variable dinámica a Terraform → var.environment = dev | prd
-          TF_VAR_environment: ${{ steps.set_env.outputs.env_name }}
-        run: terraform apply -auto-approve tfplan.binary
-
-
+  # instances:
+  #   name: "💻 Computo (Instances)"
+  #   needs: [set-env, network]
+  #   uses: ./.github/workflows/reusable-terraform.yaml
+  #   with:
+  #     working_directory: "instances"
+  #     environment: ${{ needs.set-env.outputs.target_env }}
+  #     tf_version: "1.9.5"
+  #     aws_region: "us-east-1"
+  #     tf_state_key: "aws-infrastructure-3tier/instances/terraform.tfstate"
+  #     var_file: "../configuration.tfvars"
+  #     enable_apply: ${{ needs.set-env.outputs.enable_apply == 'true' }}
+  #   secrets: inherit
