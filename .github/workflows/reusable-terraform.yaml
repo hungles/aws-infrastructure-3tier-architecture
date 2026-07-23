@@ -29,9 +29,10 @@ on:
         default: "us-east-1"
         description: "Región de AWS"
       tf_state_bucket:
-        required: true
+        required: false
         type: string
-        description: "Nombre del bucket S3 para el estado remoto de Terraform"
+        default: ""
+        description: "Nombre del bucket S3 (si está vacío, usará secrets.TF_STATE_BUCKET)"
       tf_state_key:
         required: true
         type: string
@@ -47,6 +48,9 @@ on:
         default: false
         description: "Indica si debe ejecutarse el paso de terraform apply"
     secrets:
+      TF_STATE_BUCKET:
+        required: false
+        description: "Nombre del bucket S3 de estado (heredado o pasado explícitamente)"
       AWS_ROLE_TO_ASSUME:
         required: false
         description: "ARN del rol IAM para autenticación vía OIDC"
@@ -89,6 +93,7 @@ jobs:
         run: terraform fmt -check -recursive
 
       - name: "Configure AWS Credentials via OIDC"
+        if: env.AWS_ROLE_TO_ASSUME != ''
         env:
           AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
         uses: aws-actions/configure-aws-credentials@v4
@@ -96,13 +101,29 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ inputs.aws_region }}
 
+      - name: "Configure AWS Credentials via Access Keys"
+        if: env.AWS_ROLE_TO_ASSUME == '' && env.AWS_ACCESS_KEY_ID != ''
+        env:
+          AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ inputs.aws_region }}
+
       - name: "Terraform init"
         id: init
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
         run: |
+          BUCKET="${{ inputs.tf_state_bucket }}"
+          if [ -z "$BUCKET" ]; then
+            BUCKET="${{ secrets.TF_STATE_BUCKET }}"
+          fi
+
           terraform init \
-            -backend-config="bucket=${{ inputs.tf_state_bucket }}" \
+            -backend-config="bucket=$BUCKET" \
             -backend-config="key=${{ inputs.tf_state_key }}" \
             -backend-config="region=${{ inputs.aws_region }}" \
             -backend-config="encrypt=true"
@@ -160,6 +181,7 @@ jobs:
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
       - name: "Configure AWS Credentials via OIDC"
+        if: env.AWS_ROLE_TO_ASSUME != ''
         env:
           AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
         uses: aws-actions/configure-aws-credentials@v4
@@ -168,6 +190,7 @@ jobs:
           aws-region: ${{ inputs.aws_region }}
 
       - name: "Configure AWS Credentials via Access Keys"
+        if: env.AWS_ROLE_TO_ASSUME == '' && env.AWS_ACCESS_KEY_ID != ''
         env:
           AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -181,8 +204,13 @@ jobs:
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
         run: |
+          BUCKET="${{ inputs.tf_state_bucket }}"
+          if [ -z "$BUCKET" ]; then
+            BUCKET="${{ secrets.TF_STATE_BUCKET }}"
+          fi
+
           terraform init \
-            -backend-config="bucket=${{ inputs.tf_state_bucket }}" \
+            -backend-config="bucket=$BUCKET" \
             -backend-config="key=${{ inputs.tf_state_key }}" \
             -backend-config="region=${{ inputs.aws_region }}" \
             -backend-config="encrypt=true"
@@ -281,6 +309,7 @@ jobs:
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
       - name: "Configure AWS Credentials via OIDC"
+        if: env.AWS_ROLE_TO_ASSUME != ''
         env:
           AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
         uses: aws-actions/configure-aws-credentials@v4
@@ -289,6 +318,7 @@ jobs:
           aws-region: ${{ inputs.aws_region }}
 
       - name: "Configure AWS Credentials via Access Keys"
+        if: env.AWS_ROLE_TO_ASSUME == '' && env.AWS_ACCESS_KEY_ID != ''
         env:
           AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -302,8 +332,13 @@ jobs:
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
         run: |
+          BUCKET="${{ inputs.tf_state_bucket }}"
+          if [ -z "$BUCKET" ]; then
+            BUCKET="${{ secrets.TF_STATE_BUCKET }}"
+          fi
+
           terraform init \
-            -backend-config="bucket=${{ inputs.tf_state_bucket }}" \
+            -backend-config="bucket=$BUCKET" \
             -backend-config="key=${{ inputs.tf_state_key }}" \
             -backend-config="region=${{ inputs.aws_region }}" \
             -backend-config="encrypt=true"

@@ -56,7 +56,6 @@ jobs:
       environment: ${{ needs.set-env.outputs.target_env }}
       tf_version: "1.9.5"
       aws_region: "us-east-1"
-      tf_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
       tf_state_key: "aws-infrastructure-3tier/network/terraform.tfstate"
       var_file: "../configuration.tfvars"
       enable_apply: ${{ needs.set-env.outputs.enable_apply == 'true' }}
@@ -74,7 +73,6 @@ jobs:
       environment: ${{ needs.set-env.outputs.target_env }}
       tf_version: "1.9.5"
       aws_region: "us-east-1"
-      tf_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
       tf_state_key: "aws-infrastructure-3tier/instances/terraform.tfstate"
       var_file: "../configuration.tfvars"
       enable_apply: ${{ needs.set-env.outputs.enable_apply == 'true' }}
