@@ -124,7 +124,7 @@ jobs:
           echo "=== 1. Terraform Init (network) ==="
           terraform init \
             -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
-            -backend-config="key=aws-infrastructure-3tier/terraform.tfstate" \
+            -backend-config="key=aws-infrastructure-3tier/network/terraform.tfstate" \
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="encrypt=true"
           
@@ -213,7 +213,7 @@ jobs:
           echo "🔴 (2/2) Destruyendo Módulo Network en ambiente: ${{ inputs.environment }}"
           terraform init \
             -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
-            -backend-config="key=aws-infrastructure-3tier/terraform.tfstate" \
+            -backend-config="key=aws-infrastructure-3tier/network/terraform.tfstate" \
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="encrypt=true"
           terraform apply -auto-approve network_destroy.tfplan
