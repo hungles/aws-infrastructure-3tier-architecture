@@ -1,7 +1,7 @@
 # ==============================================================================
 # Pipeline: Terraform CI/CD
-# Descripción: Valida, planifica y aplica la infraestructura AWS.
-#              El estado remoto se almacena en un bucket de S3.
+# Description: Validates, plans and applies Terraform code.
+#              The remote state is stored in an S3 bucket.
 # ==============================================================================
 name: "Terraform CI/CD"
 
@@ -18,36 +18,29 @@ on:
 env:
   TF_VERSION: "1.9.5"
   AWS_REGION: "us-east-1"
-  # Nombre del bucket S3 donde se guarda el estado remoto
   TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
-  # Clave (ruta) del archivo de estado dentro del bucket
   TF_STATE_KEY: "aws-infrastructure-3tier/terraform.tfstate"
 
 permissions:
-  id-token: write   # Necesario para que GitHub genere el JWT de OIDC
-  contents: read    # Necesario para hacer checkout del código
+  id-token: write 
+  contents: read    
 
 jobs:
-  # ----------------------------------------------------------------------------
-  # JOB 1: Formato y Validación
-  # Se ejecuta en TODOS los eventos (push y pull_request)
-  # ----------------------------------------------------------------------------
+
   fmt-and-validate:
-    name: "🔍 Format & Validate"
+    name: "Format & Validate"
     runs-on: ubuntu-latest
     environment: ${{ (github.ref == 'refs/heads/main' || github.base_ref == 'main') && 'production' || 'dev' }}
     permissions:
       id-token: write
       contents: read
-      pull-requests: write   # Necesario para comentar en PRs
+      pull-requests: write
 
     steps:
-      - name: "📥 Checkout del código"
+      - name: "Checkout del código"
         uses: actions/checkout@v4
 
-      # Deriva el nombre del entorno en función de la rama destino del PR o del push
-      # PR → dev  = dev | PR → main = prd
-      - name: "🌐 Set environment name"
+      - name: "Set environment name"
         id: set_env
         run: |
           TARGET_BRANCH="${{ github.base_ref || github.ref_name }}"
@@ -57,25 +50,23 @@ jobs:
             echo "env_name=dev" >> $GITHUB_OUTPUT
           fi
 
-      - name: "⚙️ Setup Terraform ${{ env.TF_VERSION }}"
+      - name: "Setup Terraform ${{ env.TF_VERSION }}"
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
-      - name: "🎨 Terraform fmt (verificación de formato)"
+      - name: "Terraform fmt (verificación de formato)"
         id: fmt
         run: terraform fmt -check -recursive
-        # El flag -check retorna exit code 1 si hay archivos mal formateados
 
       - name: Configure AWS Credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          # Inyecta dinámicamente el ARN del rol de la cuenta de DEV
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: "🚀 Terraform init (con backend S3)"
+      - name: "Terraform init (con backend S3)"
         id: init
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
@@ -86,12 +77,11 @@ jobs:
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="encrypt=true"
 
-      - name: "✅ Terraform validate"
+      - name: "Terraform validate"
         id: validate
         run: terraform validate -no-color
 
-      # Publica un comentario en el PR con el resultado de fmt/validate
-      - name: "💬 Comentar resultado en PR"
+      - name: "Comentar resultado en PR"
         uses: actions/github-script@v7
         if: github.event_name == 'pull_request'
         with:
@@ -110,12 +100,8 @@ jobs:
               body: output
             });
 
-  # ----------------------------------------------------------------------------
-  # JOB 2: Plan
-  # Se ejecuta en TODOS los eventos después de fmt-and-validate
-  # ----------------------------------------------------------------------------
   plan:
-    name: "📋 Terraform Plan"
+    name: "Terraform Plan"
     runs-on: ubuntu-latest
     environment: ${{ (github.ref == 'refs/heads/main' || github.base_ref == 'main') && 'production' || 'dev' }}
     needs: fmt-and-validate
@@ -125,12 +111,10 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: "📥 Checkout del código"
+      - name: "Checkout del código"
         uses: actions/checkout@v4
 
-      # Deriva el nombre del entorno en función de la rama destino del PR o del push
-      # PR → dev  = dev | PR → main = prd
-      - name: "🌐 Set environment name"
+      - name: "Set environment name"
         id: set_env
         run: |
           TARGET_BRANCH="${{ github.base_ref || github.ref_name }}"
@@ -140,7 +124,7 @@ jobs:
             echo "env_name=dev" >> $GITHUB_OUTPUT
           fi
 
-      - name: "⚙️ Setup Terraform ${{ env.TF_VERSION }}"
+      - name: "Setup Terraform ${{ env.TF_VERSION }}"
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
@@ -148,11 +132,10 @@ jobs:
       - name: Configure AWS Credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          # Inyecta dinámicamente el ARN del rol de la cuenta de DEV
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: "🚀 Terraform init"
+      - name: "Terraform init"
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
         run: |
@@ -162,26 +145,24 @@ jobs:
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="encrypt=true"
 
-      - name: "📋 Terraform plan"
+      - name: "Terraform plan"
         id: plan
         env:
-          # Pasa la variable dinámica a Terraform → var.environment = dev | prd
           TF_VAR_environment: ${{ steps.set_env.outputs.env_name }}
         run: |
           terraform plan \
             -var-file="configuration.tfvars" \
             -out=tfplan.binary \
             -no-color 2>&1 | tee plan_output.txt
-        # El plan se guarda como artefacto para que apply lo use
 
-      - name: "💾 Guardar plan como artefacto"
+      - name: "Guardar plan como artefacto"
         uses: actions/upload-artifact@v4
         with:
           name: tfplan
           path: tfplan.binary
           retention-days: 5
 
-      - name: "💬 Publicar plan en PR"
+      - name: "Publicar plan en PR"
         uses: actions/github-script@v7
         if: github.event_name == 'pull_request'
         with:
@@ -209,30 +190,21 @@ jobs:
             *Ejecutado por: @${{ github.actor }}*`
             });
 
-  # ----------------------------------------------------------------------------
-  # JOB 3: Apply
-  # Solo se ejecuta en push a 'main' (no en PRs)
-  # Requiere aprobación manual mediante GitHub Environments
-  # ----------------------------------------------------------------------------
   apply:
-    name: "🚀 Terraform Apply"
+    name: "Terraform Apply"
     runs-on: ubuntu-latest
     needs: plan
-    # Solo aplica en push directo a main (no en pull_request)
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' || github.ref == 'refs/heads/dev' && github.event_name == 'push'
-    # Requiere aprobación manual (configura el environment 'production' en GitHub)
     environment: ${{ (github.ref == 'refs/heads/main' || github.base_ref == 'main') && 'production' || 'dev' }}
     permissions:
       id-token: write
       contents: read
 
     steps:
-      - name: "📥 Checkout del código"
+      - name: "Checkout del código"
         uses: actions/checkout@v4
 
-      # Deriva el nombre del entorno en función de la rama destino del PR o del push
-      # PR → dev  = dev | PR → main = prd
-      - name: "🌐 Set environment name"
+      - name: "Set environment name"
         id: set_env
         run: |
           TARGET_BRANCH="${{ github.base_ref || github.ref_name }}"
@@ -242,7 +214,7 @@ jobs:
             echo "env_name=dev" >> $GITHUB_OUTPUT
           fi
 
-      - name: "⚙️ Setup Terraform ${{ env.TF_VERSION }}"
+      - name: "Setup Terraform ${{ env.TF_VERSION }}"
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
@@ -250,11 +222,10 @@ jobs:
       - name: Configure AWS Credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          # Inyecta dinámicamente el ARN del rol de la cuenta de DEV
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: "🚀 Terraform init"
+      - name: "Terraform init"
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
         run: |
@@ -264,14 +235,13 @@ jobs:
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="encrypt=true"
 
-      - name: "📥 Descargar plan aprobado"
+      - name: "Download artifact"
         uses: actions/download-artifact@v4
         with:
           name: tfplan
 
-      - name: "✅ Terraform apply"
+      - name: "Terraform apply"
         env:
-          # Pasa la variable dinámica a Terraform → var.environment = dev | prd
           TF_VAR_environment: ${{ steps.set_env.outputs.env_name }}
         run: terraform apply -auto-approve tfplan.binary
 
