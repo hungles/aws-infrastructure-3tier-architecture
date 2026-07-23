@@ -64,16 +64,16 @@ jobs:
   # ----------------------------------------------------------------------------
   # MÓDULO 2: Instances (Servidores EC2) - Depende de Network
   # ----------------------------------------------------------------------------
-  # instances:
-  #   name: "💻 Computo (Instances)"
-  #   needs: [set-env, network]
-  #   uses: ./.github/workflows/reusable-terraform.yaml
-  #   with:
-  #     working_directory: "instances"
-  #     environment: ${{ needs.set-env.outputs.target_env }}
-  #     tf_version: "1.9.5"
-  #     aws_region: "us-east-1"
-  #     tf_state_key: "aws-infrastructure-3tier/instances/terraform.tfstate"
-  #     var_file: "../configuration.tfvars"
-  #     enable_apply: ${{ needs.set-env.outputs.enable_apply == 'true' }}
-  #   secrets: inherit
+  instances:
+    name: "💻 Computo (Instances)"
+    needs: [set-env, network]
+    uses: ./.github/workflows/reusable-terraform.yaml
+    with:
+      working_directory: "instances"
+      environment: ${{ needs.set-env.outputs.target_env }}
+      tf_version: "1.9.5"
+      aws_region: "us-east-1"
+      tf_state_key: "aws-infrastructure-3tier/instances/terraform.tfstate"
+      var_file: "../configuration.tfvars"
+      enable_apply: ${{ needs.set-env.outputs.enable_apply == 'true' }}
+    secrets: inherit
