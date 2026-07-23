@@ -12,57 +12,51 @@ on:
       working_directory:
         required: true
         type: string
-        description: "Directorio de trabajo del módulo de Terraform (ej: network, instances)"
+        description: "Terraform module working directory (e.g., network, instances)"
       environment:
         required: false
         type: string
         default: "dev"
-        description: "Ambiente de despliegue (dev, production)"
+        description: "Deployment environment (dev, production)"
       tf_version:
         required: false
         type: string
         default: "1.9.5"
-        description: "Versión de Terraform a instalar"
+        description: "Terraform version to install"
       aws_region:
         required: false
         type: string
         default: "us-east-1"
-        description: "Región de AWS"
+        description: "AWS Region"
       tf_state_bucket:
         required: false
         type: string
         default: ""
-        description: "Nombre del bucket S3 (si está vacío, usará secrets.TF_STATE_BUCKET)"
+        description: "S3 bucket name (if empty, uses secrets.TF_STATE_BUCKET)"
       tf_state_key:
         required: true
         type: string
-        description: "Ruta de la clave en S3 para el archivo .tfstate"
+        description: "S3 key path for the .tfstate file"
       var_file:
         required: false
         type: string
         default: ""
-        description: "Ruta al archivo .tfvars (opcional)"
+        description: "Path to the .tfvars file (optional)"
       enable_apply:
         required: false
         type: boolean
         default: false
-        description: "Indica si debe ejecutarse el paso de terraform apply"
+        description: "Indicates whether the terraform apply step should be executed"
     secrets:
       TF_STATE_BUCKET:
         required: false
-        description: "Nombre del bucket S3 de estado (heredado o pasado explícitamente)"
+        description: "State S3 bucket name (inherited or passed explicitly)"
       AWS_ROLE_TO_ASSUME:
         required: false
-        description: "ARN del rol IAM para autenticación vía OIDC"
-      AWS_ACCESS_KEY_ID:
-        required: false
-        description: "Access Key ID de AWS (fallback si no se usa OIDC)"
-      AWS_SECRET_ACCESS_KEY:
-        required: false
-        description: "Secret Access Key de AWS (fallback si no se usa OIDC)"
+        description: "IAM Role ARN for OIDC authentication"
       TF_API_TOKEN:
         required: false
-        description: "Token de Terraform Cloud / Enterprise si se requiere"
+        description: "Terraform Cloud / Enterprise token if required"
 
 permissions:
   id-token: write
