@@ -52,12 +52,20 @@ jobs:
       - name: "Set environment name"
         id: set_env
         run: |
-          TARGET_BRANCH="${{ github.base_ref || github.ref_name }}"
-          if [ "$TARGET_BRANCH" = "main" ]; then
-            echo "env_name=prod" >> $GITHUB_OUTPUT
+          SELECTED_ENV="${{ github.event.inputs.environment }}"
+          
+          # Hacemos la lógica de mapeo según lo que necesites
+          if [ "$SELECTED_ENV" = "production" ]; then
+            ENV_NAME="prd"
+          elif [ "$SELECTED_ENV" = "staging" ]; then
+            ENV_NAME="staging"
           else
-            echo "env_name=dev" >> $GITHUB_OUTPUT
+            ENV_NAME="dev"
           fi
+          
+          echo "Ambiente mapeado: $ENV_NAME"
+          
+          echo "env_name=$ENV_NAME" >> $GITHUB_OUTPUT
 
   # ----------------------------------------------------------------------------
   # JOB 2: Plan de destrucción — muestra qué se va a eliminar antes de actuar
