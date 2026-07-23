@@ -12,7 +12,7 @@ data "terraform_remote_state" "network" {
 # 2. Obtener todas las subredes privadas usando el VPC ID del state
 data "aws_subnets" "private" {
   filter {
-    name   = "vpc-id"
+    name = "vpc-id"
     # Cambiamos var.vpc_id por el output del remote state:
     values = [data.terraform_remote_state.network.outputs.vpc_id]
   }
@@ -26,7 +26,7 @@ data "aws_subnets" "private" {
 # 3. Obtener todas las subredes públicas usando el VPC ID del state
 data "aws_subnets" "public" {
   filter {
-    name   = "vpc-id"
+    name = "vpc-id"
     # Cambiamos var.vpc_id por el output del remote state:
     values = [data.terraform_remote_state.network.outputs.vpc_id]
   }

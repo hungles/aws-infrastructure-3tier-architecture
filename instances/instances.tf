@@ -1,6 +1,6 @@
 module "app_servers" {
-  source  = "app.terraform.io/hungles_terraform/ec2_Instance/aws"
-  version = "0.0.2"
+  source   = "app.terraform.io/hungles_terraform/ec2_Instance/aws"
+  version  = "0.0.2"
   for_each = local.instance_configs
 
   environment   = var.environment
@@ -9,5 +9,5 @@ module "app_servers" {
 
   subnet_ids          = [each.value.subnet_id]
   security_group_name = each.value.security_group_name
-  ssh_allowed_cidr = "0.0.0.0/0"
+  ssh_allowed_cidr    = "0.0.0.0/0"
 }
