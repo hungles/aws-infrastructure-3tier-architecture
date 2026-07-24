@@ -1,11 +1,17 @@
+locals {
+  # Selecciona el bucket del mapa usando var.environment
+  # Sintaxis: lookup(mapa, llave, valor_por_defecto_opcional)
+  selected_bucket = lookup(var.remote_state_buckets, var.environment, var.remote_state_buckets["dev"])
+}
+
 # 1. Leer el estado remoto de la red desde S3
 data "terraform_remote_state" "network" {
   backend = "s3"
 
   config = {
-    bucket = "hungles-terraform-states-devv"
-    key    = "aws-infrastructure-3tier/network/terraform.tfstate"
-    region = "us-east-1"
+    bucket = local.selected_bucket
+    key    = var.remote_state_key
+    region = var.aws_region
   }
 }
 

@@ -75,5 +75,8 @@ jobs:
       aws_region: "us-east-1"
       tf_state_key: "aws-infrastructure-3tier/instances/terraform.tfstate"
       var_file: "../configuration.tfvars"
+      custom_vars: |
+        remote_state_key=aws-infrastructure-3tier/network/terraform.tfstate
+        aws_region=us-east-1
       enable_apply: ${{ needs.set-env.outputs.enable_apply == 'true' }}
     secrets: inherit
