@@ -1,19 +1,23 @@
 variable "environment" {
-  description = "Nombre del entorno (dev, staging, prod)"
+  description = "Nombre del entorno (dev, prod)"
   type        = string
 }
 
-variable "remote_state_bucket" {
-  description = "Nombre del bucket S3 para el remote state de network"
-  type        = string
+variable "remote_state_buckets" {
+  type        = map(string)
+  description = "Mapa de buckets de S3 por ambiente"
+  default = {
+    "dev" = "hungles-terraform-states-devv"
+    "prd" = "hungles-terraform-states-prod"
+  }
 }
 
 variable "remote_state_key" {
-  description = "Clave del remote state de network en S3"
+  description = "S3 Remote state key"
   type        = string
 }
 
 variable "aws_region" {
-  description = "Región de AWS"
+  description = "AWS Region"
   type        = string
 }
