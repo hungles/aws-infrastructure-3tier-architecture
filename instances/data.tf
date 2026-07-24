@@ -3,9 +3,9 @@ data "terraform_remote_state" "network" {
   backend = "s3"
 
   config = {
-    bucket = "hungles-terraform-states-devv"
-    key    = "aws-infrastructure-3tier/network/terraform.tfstate"
-    region = "us-east-1"
+    bucket = var.remote_state_bucket
+    key    = var.remote_state_key
+    region = var.aws_region
   }
 }
 
